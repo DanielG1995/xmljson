@@ -1,19 +1,25 @@
-import { Resolver, Query, Mutation, Args, Int, ResolveField, Float, Parent } from '@nestjs/graphql';
+import { Resolver, Query, Args } from '@nestjs/graphql';
 import { VehicleType } from './entities/VehicleType';
+import { VehicleService } from './Vehicle.service';
+import { PaginationArgs } from 'src/common/dto/args/pagination.args';
 
 
 @Resolver(() => VehicleType)
 export class VehicleResolver {
   constructor(
-    //private readonly usersService: UsersService,
-    //private readonly debtsService: DebtsService
+    private readonly vehicleService: VehicleService,
   ) { }
 
 
 
   @Query(() => [VehicleType], { name: 'vehicleType' })
-  findAll() {
-    return []
+  findAll(@Args() paginationArgs: PaginationArgs) {
+    return this.vehicleService.findAll(paginationArgs)
+  }
+
+  @Query(() => VehicleType, { name: 'vehicleById' })
+  findById(@Args('id', { type: () => Number }) id: number) {
+    return this.vehicleService.findOneById(id);
   }
 
 

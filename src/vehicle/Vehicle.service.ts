@@ -1,35 +1,36 @@
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
-import { Makes } from './entities/Makes';
+import { VehicleType } from './entities/VehicleType';
 import { PaginationArgs } from 'src/common/dto/args/pagination.args';
 
 @Injectable()
-export class MakesService {
+export class VehicleService {
 
     constructor(
-        @InjectRepository(Makes)
-        private readonly makesRepository: Repository<Makes>
+        @InjectRepository(VehicleType)
+        private readonly vehicleRepository: Repository<VehicleType>
     ) { }
 
-    findAll(paginationArgs: PaginationArgs) {
+    async findAll(paginationArgs: PaginationArgs) {
         const { limit, offset } = paginationArgs;
-        const queryBuilder = this.makesRepository.createQueryBuilder('makes')
-            .leftJoinAndSelect('makes.vehiclesType', 'vehiclesType')
-            .take(limit)
+        const queryBuilder = this.vehicleRepository.createQueryBuilder('vehicleType')
             .skip(offset)
+            .take(limit)
+            .leftJoinAndSelect('vehicleType.makes', 'makes')
 
         return queryBuilder.getMany()
         //return this.makesRepository.find({ relations: { vehiclesType: true } });
     }
 
+
     async findOneById(id: number) {
-        const make = await this.makesRepository.findOne({
+        const make = await this.vehicleRepository.findOne({
             where: {
-                makeId: id
+                typeId: id
             },
             relations: {
-                vehiclesType: true,
+                makes: true,
             },
         })
         return make

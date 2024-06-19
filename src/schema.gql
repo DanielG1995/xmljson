@@ -15,7 +15,8 @@ type VehicleType {
 }
 
 type Query {
-  vehicleType: [VehicleType!]!
+  vehicleType(offset: Int = 0, limit: Int = 10): [VehicleType!]!
+  vehicleById(id: Float!): VehicleType!
   makeById(id: Float!): Makes!
-  make: [Makes!]!
+  make(offset: Int = 0, limit: Int = 10): [Makes!]!
 }

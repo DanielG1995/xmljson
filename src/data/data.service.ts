@@ -19,24 +19,20 @@ export class DataService {
   async loadData(XMLData: string, params: SearchParams): Promise<Makes[]> {
     try {
       let { skip = 0, limit = 0 } = params
-
-      console.log(limit, skip)
-
       let data = []
       const parser = new XMLParser();
       let parsedData: XmlData = parser.parse(XMLData);
       const makes = parsedData.Response?.Results?.AllVehicleMakes
       if (limit === 0) {
-        limit = makes.length - 1;
+        limit = makes.length;
       }
       let i = skip
-      for (const make of parsedData.Response.Results?.AllVehicleMakes?.slice(+skip, +skip + limit * 1)) {
+      for (const make of makes?.slice(+skip, +skip + limit * 1)) {
         const newMake = { makeId: make.Make_ID, makeName: make.Make_Name }
         const vehicleTypes = await this.getVehicleTypesByMake(newMake)
         const vehicleTypesSaved = await this.checkSavedVehicles(vehicleTypes)
         const makeToSave = this.makeRepository.create({ ...newMake, vehiclesType: vehicleTypesSaved })
-        data.push(makeToSave)
-        console.log(makeToSave, i++)
+        data.push({ ...newMake, vehiclesType: vehicleTypesSaved })
         await this.makeRepository.save(makeToSave)
       }
       return data;
@@ -59,7 +55,7 @@ export class DataService {
       if (limit === 0) {
         limit = makes.length
       }
-      for (let i = skip; i < limit; i = Math.min(i + 50, makes.length-1)) {
+      for (let i = skip; i < limit; i = Math.min(i + 50, makes.length - 1)) {
         const newMakes = makes.slice(i, i + 50).map(make => ({ makeId: make.Make_ID, makeName: make.Make_Name }))
         const VehicleTypesPromises = await Promise.all([...newMakes.map(newMake => this.getVehicleTypesByMake(newMake))])
         const vehicleTypesSavedPromises = await Promise.all([...VehicleTypesPromises.map(vehicleTypes => this.checkSavedVehicles(vehicleTypes))])
@@ -97,18 +93,21 @@ export class DataService {
     }
   }
 
-  async checkSavedVehicles(vehiclesType: VehicleType[]): Promise<VehicleType[]> {
+  async checkSavedVehicles(vehiclesType: VehicleType[]=[]): Promise<VehicleType[]> {
 
     const existingVehicleTypes = await this.vehicleRepository.find({
       where: vehiclesType.map(type => ({ typeId: type.typeId })),
     });
-    const newVehicleTypes = vehiclesType.filter(
-      type => !existingVehicleTypes.some(existingType => existingType.typeId === type.typeId),
-    );
-    const newVehicleTypesEntities = this.vehicleRepository.create(newVehicleTypes);
-    await this.vehicleRepository.save(newVehicleTypesEntities);
-    const allVehicleTypes = [...existingVehicleTypes, ...newVehicleTypesEntities];
-    return allVehicleTypes
+    if (existingVehicleTypes && existingVehicleTypes.length > 0) {
+      const newVehicleTypes = vehiclesType.filter(
+        type => !existingVehicleTypes?.some(existingType => existingType.typeId === type.typeId),
+      );
+      const newVehicleTypesEntities = this.vehicleRepository.create(newVehicleTypes);
+      await this.vehicleRepository.save(newVehicleTypesEntities);
+      const allVehicleTypes = [...existingVehicleTypes, ...newVehicleTypesEntities];
+      return allVehicleTypes
+    }
+    return []
   }
 
 

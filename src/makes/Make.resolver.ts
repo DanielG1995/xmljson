@@ -1,6 +1,7 @@
 import { Resolver, Query, Args } from '@nestjs/graphql';
 import { Makes } from './entities/Makes';
 import { MakesService } from './Make.service';
+import { PaginationArgs } from 'src/common/dto/args/pagination.args';
 
 
 @Resolver(() => Makes)
@@ -16,8 +17,8 @@ export class MakesResolver {
   }
 
   @Query(() => [Makes], { name: 'make' })
-  findAll() {
-    return this.makesService.findAll()
+  findAll(@Args() paginationArgs: PaginationArgs) {
+    return this.makesService.findAll(paginationArgs)
   }
 
 
