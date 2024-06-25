@@ -1,5 +1,5 @@
 import { Resolver, Query, Args } from '@nestjs/graphql';
-import { Makes } from './entities/Makes';
+import { Makes } from './schema/Makes.schema';
 import { MakesService } from './Make.service';
 import { PaginationArgs } from 'src/common/dto/args/pagination.args';
 

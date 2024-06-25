@@ -1,22 +1,30 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { XMLParser } from 'fast-xml-parser'
-import { SearchParams, XmlData } from 'src/interfaces';
-import { Makes } from '../makes/entities/Makes';
-import { VehicleType } from '../vehicle/entities/VehicleType';
-import { Repository } from 'typeorm';
+import { SearchParams, VehicleTypeInterface, XmlData } from 'src/interfaces';
+import { Makes } from '../makes/schema/Makes.schema';
+import { VehicleType } from '../vehicle/schema/VehicleType.schema';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class DataService {
 
+  private currentVehiclesTypes: VehicleType[] = []
+
   constructor(
-    @InjectRepository(Makes)
-    private readonly makeRepository: Repository<Makes>,
-    @InjectRepository(VehicleType)
-    private readonly vehicleRepository: Repository<VehicleType>
+    @InjectModel(Makes.name) private readonly makeModel: Model<Makes>,
+    @InjectModel(VehicleType.name) private readonly vehicleModel: Model<VehicleType>,
   ) { }
 
-  async loadData(XMLData: string, params: SearchParams): Promise<Makes[]> {
+  async loadDataByUrl(url: string) {
+    try {
+      const response = await fetch(url);
+      const xmlData = await response.text()
+      return await this.loadData(xmlData)
+    } catch (e) { }
+  }
+
+  async loadData(XMLData: string, params?: SearchParams): Promise<Makes[]> {
     try {
       let { skip = 0, limit = 0 } = params
       let data = []
@@ -27,13 +35,20 @@ export class DataService {
         limit = makes.length;
       }
       let i = skip
+      this.currentVehiclesTypes = await this.vehicleModel.find();
       for (const make of makes?.slice(+skip, +skip + limit * 1)) {
-        const newMake = { makeId: make.Make_ID, makeName: make.Make_Name }
-        const vehicleTypes = await this.getVehicleTypesByMake(newMake)
-        const vehicleTypesSaved = await this.checkSavedVehicles(vehicleTypes)
-        const makeToSave = this.makeRepository.create({ ...newMake, vehiclesType: vehicleTypesSaved })
-        data.push({ ...newMake, vehiclesType: vehicleTypesSaved })
-        await this.makeRepository.save(makeToSave)
+        const existingMake = (await this.makeModel.findOne({ makeId: make.Make_ID }).populate('vehiclesType').exec());
+        if (existingMake) {
+          data.push(existingMake)
+          continue;
+        }
+        const vehiclesType = await this.getVehicleTypesByMake({ makeId: make.Make_ID, makeName: make.Make_Name } as Makes)
+        const vehicleTypesSaved = await this.checkSavedVehicles(vehiclesType)
+        data.push({ makeId: make.Make_ID, makeName: make.Make_Name, vehiclesType })
+        const newMake = { makeId: make.Make_ID, makeName: make.Make_Name, vehiclesType: vehicleTypesSaved };
+        console.log(newMake, i)
+        await this.makeModel.create(newMake)
+        i++
       }
       return data;
     } catch (error) {
@@ -42,40 +57,7 @@ export class DataService {
   }
 
 
-  async loadDataPromises(XMLData: string, params: SearchParams): Promise<{ data: Makes[], length: number }> {
-    try {
-      let { skip = 0, limit = 0 } = params
-
-      console.log(limit, skip)
-
-      let data = []
-      const parser = new XMLParser();
-      let parsedData: XmlData = parser.parse(XMLData);
-      const makes = parsedData.Response?.Results?.AllVehicleMakes
-      if (limit === 0) {
-        limit = makes.length
-      }
-      for (let i = skip; i < limit; i = Math.min(i + 50, makes.length - 1)) {
-        const newMakes = makes.slice(i, i + 50).map(make => ({ makeId: make.Make_ID, makeName: make.Make_Name }))
-        const VehicleTypesPromises = await Promise.all([...newMakes.map(newMake => this.getVehicleTypesByMake(newMake))])
-        const vehicleTypesSavedPromises = await Promise.all([...VehicleTypesPromises.map(vehicleTypes => this.checkSavedVehicles(vehicleTypes))])
-        const makeToSaveArr = []
-        vehicleTypesSavedPromises.forEach(((vt, index) => {
-          makeToSaveArr.push(this.makeRepository.create({ ...newMakes?.[index], vehiclesType: vt }))
-        }
-        ))
-        data.push(...makeToSaveArr)
-        await Promise.all([...makeToSaveArr.map(mk => this.makeRepository.save(mk))])
-        console.log(makeToSaveArr, i)
-      }
-      return { data, length: data.length };
-    } catch (error) {
-      throw new Error(`Invalid format ${error}`);
-    }
-  }
-
-
-  async getVehicleTypesByMake(makes: Makes): Promise<VehicleType[]> {
+  async getVehicleTypesByMake(makes: Makes): Promise<VehicleTypeInterface[]> {
     try {
       const parser = new XMLParser();
       const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/GetVehicleTypesForMakeId/${makes.makeId}?format=xml`);
@@ -85,30 +67,30 @@ export class DataService {
       if (!vehiclesTypes) return []
       if (!Array.isArray(vehiclesTypes))
         parsedData.Response.Results.VehicleTypesForMakeIds = [vehiclesTypes]
-
-      return parsedData.Response.Results.VehicleTypesForMakeIds.map(vt => ({ typeId: vt.VehicleTypeId, typeName: vt.VehicleTypeName }))
-
+      const vehicleTypes = parsedData.Response.Results.VehicleTypesForMakeIds.map(vt => ({ typeId: vt.VehicleTypeId, typeName: vt.VehicleTypeName }))
+      return vehicleTypes
     } catch (error) {
       console.log(error)
     }
   }
 
-  async checkSavedVehicles(vehiclesType: VehicleType[]=[]): Promise<VehicleType[]> {
+  async checkSavedVehicles(vehiclesType: VehicleTypeInterface[] = []): Promise<VehicleType[]> {
 
-    const existingVehicleTypes = await this.vehicleRepository.find({
-      where: vehiclesType.map(type => ({ typeId: type.typeId })),
-    });
-    if (existingVehicleTypes && existingVehicleTypes.length > 0) {
-      const newVehicleTypes = vehiclesType.filter(
-        type => !existingVehicleTypes?.some(existingType => existingType.typeId === type.typeId),
-      );
-      const newVehicleTypesEntities = this.vehicleRepository.create(newVehicleTypes);
-      await this.vehicleRepository.save(newVehicleTypesEntities);
-      const allVehicleTypes = [...existingVehicleTypes, ...newVehicleTypesEntities];
-      return allVehicleTypes
+    const allVehicleType: VehicleType[] = []
+
+    for (const vt of vehiclesType) {
+      const currentVehicleType = this.currentVehiclesTypes.find(cvt => cvt.typeId === vt.typeId)
+      if (!currentVehicleType) {
+        const newVehicleType = await this.vehicleModel.create(vt)
+        this.currentVehiclesTypes.push(newVehicleType)
+        allVehicleType.push(newVehicleType)
+      } else {
+        allVehicleType.push(currentVehicleType)
+      }
+
     }
-    return []
-  }
 
+    return allVehicleType
+  }
 
 }

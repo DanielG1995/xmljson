@@ -2,16 +2,15 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type VehicleType {
+  typeId: Float!
+  typeName: String!
+}
+
 type Makes {
   makeId: Float!
   makeName: String!
   vehiclesType: [VehicleType!]
-}
-
-type VehicleType {
-  typeId: Float!
-  typeName: String!
-  makes: [Makes!]!
 }
 
 type Query {

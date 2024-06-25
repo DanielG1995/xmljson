@@ -1,54 +1,54 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getModelToken } from '@nestjs/mongoose';
 import { DataService } from './data.service';
-import { Makes } from '../makes/entities/Makes';
-import { VehicleType } from '../vehicle/entities/VehicleType';
-import { Repository } from 'typeorm';
-
-const mockMakesRepository = {
-  create: jest.fn(),
-  save: jest.fn(),
-};
-
-const mockVehicleRepository = {
-  find: jest.fn(),
-  create: jest.fn(),
-  save: jest.fn(),
-};
+import { Makes } from '../makes/schema/makes.schema';
+import { VehicleType } from '../vehicle/schema/VehicleType.schema';
+import { Model } from 'mongoose';
 
 describe('DataService', () => {
   let service: DataService;
-  let makeRepository: Repository<Makes>;
-  let vehicleRepository: Repository<VehicleType>;
+  let makesModel: Model<Makes>;
+  let vehicleModel: Model<VehicleType>;
+
+  const mockMakesModel = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockVehicleModel = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DataService,
         {
-          provide: getRepositoryToken(Makes),
-          useValue: mockMakesRepository,
+          provide: getModelToken(Makes.name),
+          useValue: mockMakesModel,
         },
         {
-          provide: getRepositoryToken(VehicleType),
-          useValue: mockVehicleRepository,
+          provide: getModelToken(VehicleType.name),
+          useValue: mockVehicleModel,
         },
       ],
     }).compile();
 
     service = module.get<DataService>(DataService);
-    makeRepository = module.get<Repository<Makes>>(getRepositoryToken(Makes));
-    vehicleRepository = module.get<Repository<VehicleType>>(getRepositoryToken(VehicleType));
+    makesModel = module.get(getModelToken(Makes.name));
+    vehicleModel = module.get(getModelToken(VehicleType.name));
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  describe('loadData', () => {
-    it('should transform data and save makes', async () => {
-      const XMLData = `<Response xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-        <Count>11354</Count>
+  it('should load data from XML correctly and create new makes', async () => {
+    const XMLData = `<Response xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+        <Count>2</Count>
         <Message>Response returned successfully</Message>
         <Results>
           <AllVehicleMakes>
@@ -61,76 +61,69 @@ describe('DataService', () => {
           </AllVehicleMakes>
         </Results>
       </Response>`;
-      
-      const params = { skip: 0, limit: 0 };
 
-      jest.spyOn(service, 'getVehicleTypesByMake').mockResolvedValueOnce([{typeId:2,typeName:'Passenger Car'}]);
-      jest.spyOn(service, 'checkSavedVehicles').mockResolvedValueOnce([{typeId:2,typeName:'Passenger Car'}]);
+    const params = { skip: 0, limit: 0 };
 
-      const result = await service.loadData(XMLData, params);
+    mockVehicleModel.find.mockResolvedValueOnce([]);
+    mockMakesModel.findOne.mockResolvedValueOnce(null);
 
-      expect(result).toHaveLength(2);
-      expect(result[0].makeId).toBe(12858);
-      expect(result[0].makeName).toBe('#1 ALPINE CUSTOMS');
-      expect(result[0].vehiclesType?.[0].typeId).toBe(2);
-      expect(result[0].vehiclesType?.[0].typeName).toBe('Passenger Car');
-      expect(mockMakesRepository.create).toHaveBeenCalledTimes(2);
-      expect(mockMakesRepository.save).toHaveBeenCalledTimes(2);
+    jest.spyOn(service, 'getVehicleTypesByMake').mockResolvedValueOnce([{ typeId: 2, typeName: 'Passenger Car' }]);
+    jest.spyOn(service, 'checkSavedVehicles').mockResolvedValueOnce([{ typeId: 2, typeName: 'Passenger Car' } as VehicleType]);
+
+    mockMakesModel.create.mockImplementationOnce((newMake) => {
+      return { ...newMake, _id: 'mocked_id' } as any
     });
+
+    const result = await service.loadData(XMLData, params);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].makeId).toBe(12858);
+    expect(result[0].makeName).toBe('#1 ALPINE CUSTOMS');
+    expect(result[0].vehiclesType?.length).toBe(1);
+    expect(result[0].vehiclesType?.[0].typeId).toBe(2);
+    expect(result[0].vehiclesType?.[0].typeName).toBe('Passenger Car');
+    expect(mockMakesModel.create).toHaveBeenCalledTimes(2);
   });
 
- 
-  describe('getVehicleTypesByMake', () => {
-    it('should transform data and return vehicle types for a given make', async () => {
-      const makes: Makes = { makeId: 12858, makeName: '#1 ALPINE CUSTOMS' };
-      const xmlResponse = `<Response xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  it('should handle existing makes and skip them', async () => {
+    const XMLData = `<Response xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
         <Count>2</Count>
         <Message>Response returned successfully</Message>
-        <SearchCriteria>Make ID: 12858</SearchCriteria>
         <Results>
-          <VehicleTypesForMakeIds>
-            <VehicleTypeId>2</VehicleTypeId>
-            <VehicleTypeName>Passenger Car</VehicleTypeName>
-          </VehicleTypesForMakeIds>
-          <VehicleTypesForMakeIds>
-            <VehicleTypeId>7</VehicleTypeId>
-            <VehicleTypeName>Multipurpose Passenger Vehicle (MPV)</VehicleTypeName>
-          </VehicleTypesForMakeIds>
+          <AllVehicleMakes>
+            <Make_ID>12858</Make_ID>
+            <Make_Name>#1 ALPINE CUSTOMS</Make_Name>
+          </AllVehicleMakes>
+          <AllVehicleMakes>
+            <Make_ID>4877</Make_ID>
+            <Make_Name>1/OFF KUSTOMS, LLC</Make_Name>
+          </AllVehicleMakes>
         </Results>
       </Response>`;
 
-      global.fetch = jest.fn().mockImplementation(() =>
-        Promise.resolve({
-          text: () => Promise.resolve(xmlResponse),
-        })
-      );
+    const params = { skip: 0, limit: 0 };
 
-      const result = await service.getVehicleTypesByMake(makes);
+    mockVehicleModel.find.mockResolvedValueOnce([]);
+    mockMakesModel.findOne.mockResolvedValueOnce({ makeId: 12858, makeName: '#1 ALPINE CUSTOMS' } as Makes);
 
-      expect(result).toHaveLength(2);
-      expect(result[0].typeId).toBe(2);
-      expect(result[0].typeName).toBe('Passenger Car');
+    jest.spyOn(service, 'getVehicleTypesByMake').mockResolvedValueOnce([{ typeId: 2, typeName: 'Passenger Car' }]);
+    jest.spyOn(service, 'checkSavedVehicles').mockResolvedValueOnce([{ typeId: 2, typeName: 'Passenger Car' } as VehicleType]);
+
+    mockMakesModel.create.mockImplementationOnce((newMake) => {
+      return { ...newMake, _id: 'mocked_id' } as any;
     });
+
+    const result = await service.loadData(XMLData, params);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].makeId).toBe(4877);
+    expect(mockMakesModel.create).toHaveBeenCalledTimes(1);
   });
 
-  describe('checkSavedVehicles', () => {
-    it('should return all vehicles types, including new ones', async () => {
-      const vehicleTypes: VehicleType[] = [
-        { typeId: 2, typeName: 'Passenger Car' },
-        { typeId: 7, typeName: 'Multipurpose Passenger Vehicle (MPV)' },
-      ];
+  it('should throw an error for invalid XML', async () => {
+    const XMLData = `<InvalidXML></InvalidXML>`;
+    const params = { skip: 0, limit: 0 };
 
-      mockVehicleRepository.find.mockResolvedValueOnce([{ typeId: 2, typeName: 'Passenger Car' }]);
-      mockVehicleRepository.create.mockReturnValueOnce([{ typeId: 7, typeName: 'Multipurpose Passenger Vehicle (MPV)' }]);
-      mockVehicleRepository.save.mockResolvedValueOnce([{ typeId: 7, typeName: 'Multipurpose Passenger Vehicle (MPV)' }]);
-
-      const result = await service.checkSavedVehicles(vehicleTypes);
-
-      expect(result).toHaveLength(2);
-      expect(result).toEqual([
-        { typeId: 2, typeName: 'Passenger Car' },
-        { typeId: 7, typeName: 'Multipurpose Passenger Vehicle (MPV)' },
-      ]);
-    });
+    await expect(service.loadData(XMLData, params)).rejects.toThrow('Invalid format');
   });
 });

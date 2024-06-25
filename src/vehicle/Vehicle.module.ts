@@ -1,16 +1,13 @@
 import { Module } from '@nestjs/common';
 import { VehicleResolver } from './Vehicle.resolver';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { VehicleType } from './entities/VehicleType';
+import { VehicleType, VehicleTypeSchema } from './schema/VehicleType.schema';
 import { VehicleService } from './Vehicle.service';
+import { MongooseModule } from '@nestjs/mongoose';
 
 @Module({
     providers: [VehicleResolver, VehicleService],
     imports: [
-        TypeOrmModule.forFeature([VehicleType]),
+        MongooseModule.forFeature([{ name: VehicleType.name, schema: VehicleTypeSchema }]),
     ],
-    exports: [
-        TypeOrmModule,
-    ]
 })
 export class VehicleModule { }

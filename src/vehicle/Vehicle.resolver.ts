@@ -1,5 +1,5 @@
 import { Resolver, Query, Args } from '@nestjs/graphql';
-import { VehicleType } from './entities/VehicleType';
+import { VehicleType } from './schema/VehicleType.schema';
 import { VehicleService } from './Vehicle.service';
 import { PaginationArgs } from 'src/common/dto/args/pagination.args';
 

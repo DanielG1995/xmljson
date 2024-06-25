@@ -1,39 +1,32 @@
-import { Repository } from 'typeorm';
-import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
-import { VehicleType } from './entities/VehicleType';
+import { VehicleType } from './schema/VehicleType.schema';
 import { PaginationArgs } from 'src/common/dto/args/pagination.args';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class VehicleService {
 
     constructor(
-        @InjectRepository(VehicleType)
-        private readonly vehicleRepository: Repository<VehicleType>
+        @InjectModel(VehicleType.name) private vehicleModel: Model<VehicleType>
     ) { }
 
     async findAll(paginationArgs: PaginationArgs) {
         const { limit, offset } = paginationArgs;
-        const queryBuilder = this.vehicleRepository.createQueryBuilder('vehicleType')
+        return this.vehicleModel
+            .find()
+            .limit(limit)
             .skip(offset)
-            .take(limit)
-            .leftJoinAndSelect('vehicleType.makes', 'makes')
-
-        return queryBuilder.getMany()
+            .exec();
         //return this.makesRepository.find({ relations: { vehiclesType: true } });
     }
 
 
     async findOneById(id: number) {
-        const make = await this.vehicleRepository.findOne({
-            where: {
-                typeId: id
-            },
-            relations: {
-                makes: true,
-            },
-        })
-        return make
+        const vehicle = await this.vehicleModel
+            .findOne({ makeId: id })
+            .exec();
+        return vehicle
     }
 
 }

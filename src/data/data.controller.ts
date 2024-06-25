@@ -5,8 +5,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { SearchParams } from 'src/interfaces';
 
 
-@Controller('data')
+@Controller('api')
 export class DataController {
+
+  URL_MAKES = 'https://vpic.nhtsa.dot.gov/api/vehicles/getallmakes?format=XML';
+
   constructor(private readonly dataService: DataService) { }
 
   @Post()
@@ -31,18 +34,15 @@ export class DataController {
     }
   }
 
-  @Post('upload/sync')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFileAsync(@UploadedFile() file: Express.Multer.File, @Query() params: SearchParams) {
-    const xmlContent = file.buffer.toString('utf8');
+  @Post('loadData')
+  async loadDataFormUrl() {
     try {
-      const json = await this.dataService.loadDataPromises(xmlContent, params);
+      const json = await this.dataService.loadDataByUrl(this.URL_MAKES);
       return json;
     } catch (error) {
       console.log(error)
     }
   }
-
 
 }
 

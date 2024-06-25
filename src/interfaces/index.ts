@@ -1,4 +1,4 @@
-import { Makes } from "src/makes/entities/Makes";
+import { Makes } from "src/makes/schema/Makes.schema";
 
 export interface XmlData {
     Response: Response;
@@ -43,5 +43,15 @@ export interface VehicleTypesForMakeIDS {
 export interface SearchParams {
     limit?: number,
     skip?: number
+}
+
+export interface VehicleTypeInterface {
+    typeId: number,
+    typeName: string
+}
+
+export interface MakesInterface {
+    makeId: number,
+    makeName: string
 }
 
