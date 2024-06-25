@@ -34,7 +34,7 @@ export class DataController {
     }
   }
 
-  @Post('loadData')
+  @Post('load-data')
   async loadDataFormUrl() {
     try {
       const json = await this.dataService.loadDataByUrl(this.URL_MAKES);
